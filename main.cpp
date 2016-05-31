@@ -2,11 +2,12 @@
 //
 
 #include <Windows.h>
+#include <windowsx.h>
 #include <memory>
 #include "include\Box2D.h"
 
 #define MAX_LOADSTRING 100
-const float timeStep = 1 / 60.0f;
+const float timeStep = 1 / 120.0f;
 b2World* world{ nullptr };
 DWORD prevTime{ 0 }, currentTime{ 0 };
 
@@ -125,6 +126,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
+void CALLBACK TimerProc(HWND hWnd, UINT msg, UINT_PTR iEvent, DWORD timeElapsed)
+{
+	InvalidateRect(hWnd, nullptr, false);
+}
+
 //
 //  ÇÔ¼ö: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -138,9 +144,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static RECT cRect;
-	static const float PPU = 100;
+	static const float PPU = 40;
 	static b2Body* groundBody;
 	static b2Body* moveBody;
+
 	switch (message)
 	{
 	case WM_CREATE:
@@ -172,22 +179,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		fDef.friction = 0.3f;
 		moveBody->CreateFixture(&fDef);
 
-		SetTimer(hWnd, 1, 1, nullptr);
+		SetTimer(hWnd, 16, 1, TimerProc);
 
 		GetClientRect(hWnd, &cRect);
 	}
 	break;
-	case WM_TIMER:
-		switch (wParam)
-		{
-		case 1:
-			InvalidateRect(hWnd, nullptr, false);
-			break;
-		}
-		break;
 	case WM_SIZE:
 		GetClientRect(hWnd, &cRect);
 		break;
+	case WM_LBUTTONDOWN:
+	{
+		float x = GET_X_LPARAM(lParam);
+		float y = GET_Y_LPARAM(lParam);
+		x /= PPU;
+		y /= PPU;
+
+		b2BodyDef bodyDef;
+		b2PolygonShape shape;
+		bodyDef.type = b2_dynamicBody;
+		bodyDef.position.Set(x, y);
+		auto b = world->CreateBody(&bodyDef);
+		shape.SetAsBox(0.1f, 0.1f);
+
+		b2FixtureDef fDef;
+		fDef.shape = &shape;
+		fDef.density = 1.0f;
+		fDef.friction = 0.3f;
+		b->CreateFixture(&fDef);
+	}
+	break;
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
@@ -204,25 +224,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			b2Fixture* fixturePointer = bodyPointer->GetFixtureList();
 			for (; fixturePointer != nullptr; fixturePointer = fixturePointer->GetNext())
 			{
-				//b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
-				//switch (fixturePointer->GetType())
-				//{
-				//case b2Shape::e_polygon:
-				//{
-				//	b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
-				//	int vtxCount = pShape->GetVertexCount();
-				//	POINT* vtxList = new POINT[vtxCount];
-				//	for (int i = 0; i < vtxCount; ++i)
-				//	{
-				//		vtxList[i].x = (pShape->GetVertex(i).x + pos.x)*PPU;
-				//		vtxList[i].y = (pShape->GetVertex(i).y + pos.y)*PPU;
-				//	}
-				//	Polygon(memDC, vtxList, vtxCount);
-				//	delete[] vtxList;
-				//}
-				//break;
-				//}
-				Rectangle(memDC, (pos.x - 0.1)*PPU, (pos.y - 0.1)*PPU, (pos.x + 0.1)*PPU, (pos.y + 0.1)*PPU);
+				b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
+				switch (fixturePointer->GetType())
+				{
+				case b2Shape::e_polygon:
+				{
+					b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
+					int vtxCount = pShape->GetVertexCount();
+					POINT* vtxList = new POINT[vtxCount];
+					for (int i = 0; i < vtxCount; ++i)
+					{
+						vtxList[i].x = (pShape->GetVertex(i).x + pos.x)*PPU;
+						vtxList[i].y = (pShape->GetVertex(i).y + pos.y)*PPU;
+					}
+					Polygon(memDC, vtxList, vtxCount);
+					delete[] vtxList;
+				}
+				break;
+				}
 			}
 		}
 
