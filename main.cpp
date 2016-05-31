@@ -140,7 +140,7 @@ void InitWall(const RECT& cRect, const float PPU)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static RECT cRect;
-	static const float PPU{ 15 };
+	static const float PPU{ 15 }, FOLLOW_SPEED{ 10 };
 	static bool isLBtnDown{ false };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
@@ -196,6 +196,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				bodyDef.position.Set(mouseX, mouseY);
 				bodyDef.angularDamping = 1.0f;
 				bodyDef.linearDamping = 1.0f;
+				bodyDef.bullet = true;
 				auto b = world->CreateBody(&bodyDef);
 				shape.SetAsBox(0.5f, 0.5f);
 
@@ -218,7 +219,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			else
 			{
 				auto v = target - bPos;
-				v *= 10;
+				v *= FOLLOW_SPEED;
 				body->SetLinearVelocity(v);
 			}
 		}
