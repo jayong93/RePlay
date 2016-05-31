@@ -6,6 +6,8 @@
 #include <memory>
 #include <list>
 #include "include\Box2D.h"
+#include "Query.h"
+#include "Object.h"
 
 #define MAX_LOADSTRING 100
 const float timeStep = 1 / 60.0f;
@@ -105,58 +107,22 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
-class CreateQuery : public b2QueryCallback
-{
-public:
-	CreateQuery() :b2QueryCallback{}, canCreate{ true } {}
-
-	bool canCreate;
-
-	bool ReportFixture(b2Fixture* fixture) override
-	{
-		canCreate = false;
-		return false;
-	}
-};
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static RECT cRect;
-	static const float PPU{ 40 };
+	static const float PPU{ 15 };
 	static bool isLBtnDown{ false };
 	static float mouseX, mouseY;
+	static b2Fixture* selectedObject{ nullptr };
 
 	switch (message)
 	{
 	case WM_CREATE:
 	{
-		world = new b2World{ b2Vec2{ 0,9.8f } };
+		world = new b2World{ b2Vec2{ 0,0 } };
 		world->SetAllowSleeping(true);
 		world->SetWarmStarting(true);
 		world->SetContinuousPhysics(true);
-
-		// 바닥 생성
-		b2BodyDef bodyDef;
-		bodyDef.position.Set(40.0f, 10.0f);
-		auto groundBody = world->CreateBody(&bodyDef);
-
-		b2PolygonShape shape;
-		shape.SetAsBox(40.0f, 2.0f);
-
-		groundBody->CreateFixture(&shape, 0.0f);
-
-		// 움직이는 박스 생성
-		bodyDef.type = b2_dynamicBody;
-		bodyDef.position.Set(4.0f, 3.0f);
-		auto moveBody = world->CreateBody(&bodyDef);
-
-		shape.SetAsBox(0.5f, 0.5f);
-
-		b2FixtureDef fDef;
-		fDef.shape = &shape;
-		fDef.density = 5.0f;
-		fDef.friction = 0.3f;
-		moveBody->CreateFixture(&fDef);
 
 		SetTimer(hWnd, 16, 1, nullptr);
 
@@ -168,15 +134,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_TIMER:
 	{
-		if (isLBtnDown)
+		if (isLBtnDown && !selectedObject)
 		{
 			b2AABB aabb;
 			aabb.lowerBound.Set(mouseX - 0.5, mouseY - 0.5);
 			aabb.upperBound.Set(mouseX + 0.5, mouseY + 0.5);
 
-			CreateQuery cq;
-			world->QueryAABB(&cq, aabb);
-			if (cq.canCreate)
+			BoxQuery bq;
+			world->QueryAABB(&bq, aabb);
+			if (bq.canCreate)
 			{
 				b2BodyDef bodyDef;
 				b2PolygonShape shape;
@@ -203,14 +169,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		mouseX = x / PPU;
 		mouseY = y / PPU;
 		isLBtnDown = true;
+
+		b2Vec2 p{ mouseX, mouseY };
+		b2AABB aabb;
+		aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
+		aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
+
+		ClickQuery cq{ p };
+		world->QueryAABB(&cq, aabb);
+
+		if (cq.fixture)
+		{
+			selectedObject = cq.fixture;
+		}
 	}
 	break;
 	case WM_MOUSEMOVE:
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
+
+		if (selectedObject)
+		{
+			auto body = selectedObject->GetBody();
+			b2Vec2 mPos{ mouseX,mouseY };
+			b2Vec2 bPos = body->GetPosition();
+			if ((mPos - bPos).Length() < 0.1)
+				body->SetLinearVelocity(b2Vec2_zero);
+			else
+				body->SetLinearVelocity(mPos - bPos);
+		}
 		break;
 	case WM_LBUTTONUP:
 		isLBtnDown = false;
+		selectedObject = nullptr;
 		break;
 	case WM_PAINT:
 	{
@@ -238,6 +229,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					vtxList[i].x = (tmpVec.x)*PPU;
 					vtxList[i].y = (tmpVec.y)*PPU;
 				}
+				if (bodyPointer->IsAwake())
+					SelectObject(memDC, GetStockObject(GRAY_BRUSH));
+				else
+					SelectObject(memDC, GetStockObject(WHITE_BRUSH));
 				Polygon(memDC, vtxList, vtxCount);
 			}
 		}
