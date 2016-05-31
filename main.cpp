@@ -10,7 +10,7 @@
 #include "Object.h"
 
 #define MAX_LOADSTRING 100
-const float timeStep = 1 / 60.0f;
+const float timeStep = 1 / 120.0f;
 b2World* world{ nullptr };
 DWORD prevTime{ 0 }, currentTime{ 0 };
 
@@ -55,7 +55,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		else
 		{
 			currentTime = GetTickCount();
-			if (currentTime - prevTime >= 500 * timeStep)
+			if (currentTime - prevTime >= 1000 * timeStep)
 			{
 				world->Step(timeStep, 8, 3);
 				prevTime = currentTime;
@@ -113,20 +113,48 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static const float PPU{ 15 };
 	static bool isLBtnDown{ false };
 	static float mouseX, mouseY;
-	static b2Fixture* selectedObject{ nullptr };
+	static MovingBox selectedObject{ nullptr };
 
 	switch (message)
 	{
 	case WM_CREATE:
 	{
+		GetClientRect(hWnd, &cRect);
+
 		world = new b2World{ b2Vec2{ 0,0 } };
 		world->SetAllowSleeping(true);
 		world->SetWarmStarting(true);
 		world->SetContinuousPhysics(true);
 
-		SetTimer(hWnd, 16, 1, nullptr);
 
-		GetClientRect(hWnd, &cRect);
+		b2PolygonShape shape;
+		b2BodyDef bodyDef;
+		b2FixtureDef fDef;
+		fDef.shape = &shape;
+		fDef.density = 5.0f;
+		fDef.restitution = 1.0f;
+		fDef.friction = 0.0f;
+
+
+		shape.SetAsBox(0.5f, cRect.bottom / 2.0f / PPU);
+		bodyDef.position.Set(cRect.right / PPU + 0.5f, cRect.bottom / 2.0f / PPU);
+		auto b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		bodyDef.position.Set(-0.5f, cRect.bottom / 2.0f / PPU);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		shape.SetAsBox(cRect.right / 2.0f / PPU, 0.5f);
+		bodyDef.position.Set(cRect.right / 2.0f / PPU, cRect.bottom / PPU + 0.5f);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		bodyDef.position.Set(cRect.right / 2.0f / PPU, -0.5f);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		SetTimer(hWnd, 16, 1, nullptr);
 	}
 	break;
 	case WM_SIZE:
@@ -134,7 +162,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_TIMER:
 	{
-		if (isLBtnDown && !selectedObject)
+		if (isLBtnDown && !selectedObject.GetBody())
 		{
 			b2AABB aabb;
 			aabb.lowerBound.Set(mouseX - 0.5, mouseY - 0.5);
@@ -148,14 +176,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				b2PolygonShape shape;
 				bodyDef.type = b2_dynamicBody;
 				bodyDef.position.Set(mouseX, mouseY);
+				bodyDef.angularDamping = 1.0f;
+				bodyDef.linearDamping = 1.0f;
 				auto b = world->CreateBody(&bodyDef);
 				shape.SetAsBox(0.5f, 0.5f);
 
 				b2FixtureDef fDef;
 				fDef.shape = &shape;
 				fDef.density = 5.0f;
-				fDef.friction = 0.3f;
+				fDef.restitution = 1.0f;
+				fDef.friction = 0.0f;
 				b->CreateFixture(&fDef);
+			}
+		}
+
+		auto body = selectedObject.GetBody();
+		if (body)
+		{
+			b2Vec2 bPos = body->GetPosition();
+			auto& target = selectedObject.GetTarget();
+			if ((target - bPos).Length() < 0.1)
+				body->SetLinearVelocity(b2Vec2_zero);
+			else
+			{
+				auto v = target - bPos;
+				v *= 10;
+				body->SetLinearVelocity(v);
 			}
 		}
 
@@ -180,28 +226,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (cq.fixture)
 		{
-			selectedObject = cq.fixture;
+			selectedObject.SetBody(cq.fixture->GetBody());
+			selectedObject.SetTarget(p);
 		}
+
+		SetCapture(hWnd);
 	}
 	break;
 	case WM_MOUSEMOVE:
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
 
-		if (selectedObject)
+		if (selectedObject.GetBody())
 		{
-			auto body = selectedObject->GetBody();
 			b2Vec2 mPos{ mouseX,mouseY };
-			b2Vec2 bPos = body->GetPosition();
-			if ((mPos - bPos).Length() < 0.1)
-				body->SetLinearVelocity(b2Vec2_zero);
-			else
-				body->SetLinearVelocity(mPos - bPos);
+			selectedObject.SetTarget(mPos);
 		}
 		break;
 	case WM_LBUTTONUP:
 		isLBtnDown = false;
-		selectedObject = nullptr;
+		selectedObject.SetBody(nullptr);
+		ReleaseCapture();
 		break;
 	case WM_PAINT:
 	{
