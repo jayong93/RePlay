@@ -4,10 +4,11 @@
 #include <Windows.h>
 #include <windowsx.h>
 #include <memory>
+#include <list>
 #include "include\Box2D.h"
 
 #define MAX_LOADSTRING 100
-const float timeStep = 1 / 120.0f;
+const float timeStep = 1 / 60.0f;
 b2World* world{ nullptr };
 DWORD prevTime{ 0 }, currentTime{ 0 };
 
@@ -56,10 +57,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		else
 		{
 			currentTime = GetTickCount();
-			if (currentTime - prevTime >= 1000 * timeStep)
+			if (currentTime - prevTime >= 500 * timeStep)
 			{
 				world->Step(timeStep, 8, 3);
-				world->ClearForces();
 				prevTime = currentTime;
 			}
 		}
@@ -147,6 +147,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static const float PPU = 40;
 	static b2Body* groundBody;
 	static b2Body* moveBody;
+	//static std::list<b2Body> bodyList;
 
 	switch (message)
 	{
@@ -155,14 +156,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		world = new b2World{ b2Vec2{ 0,9.8f } };
 		world->SetAllowSleeping(true);
 		world->SetWarmStarting(true);
+		world->SetContinuousPhysics(true);
 
 		// ¹Ù´Ú »ý¼º
 		b2BodyDef bodyDef;
-		bodyDef.position.Set(4.0f, 7.5f);
+		bodyDef.position.Set(40.0f, 10.0f);
 		groundBody = world->CreateBody(&bodyDef);
 
 		b2PolygonShape shape;
-		shape.SetAsBox(8.0f, 2.0f);
+		shape.SetAsBox(40.0f, 2.0f);
 
 		groundBody->CreateFixture(&shape, 0.0f);
 
@@ -171,11 +173,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		bodyDef.position.Set(4.0f, 3.0f);
 		moveBody = world->CreateBody(&bodyDef);
 
-		shape.SetAsBox(0.1f, 0.1f);
+		shape.SetAsBox(0.5f, 0.5f);
 
 		b2FixtureDef fDef;
 		fDef.shape = &shape;
-		fDef.density = 1.0f;
+		fDef.density = 5.0f;
 		fDef.friction = 0.3f;
 		moveBody->CreateFixture(&fDef);
 
@@ -199,11 +201,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		bodyDef.type = b2_dynamicBody;
 		bodyDef.position.Set(x, y);
 		auto b = world->CreateBody(&bodyDef);
-		shape.SetAsBox(0.1f, 0.1f);
+		shape.SetAsBox(0.5f, 0.5f);
 
 		b2FixtureDef fDef;
 		fDef.shape = &shape;
-		fDef.density = 1.0f;
+		fDef.density = 5.0f;
 		fDef.friction = 0.3f;
 		b->CreateFixture(&fDef);
 	}
@@ -225,23 +227,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			for (; fixturePointer != nullptr; fixturePointer = fixturePointer->GetNext())
 			{
 				b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
-				switch (fixturePointer->GetType())
+				int vtxCount = pShape->GetVertexCount();
+				POINT vtxList[b2_maxPolygonVertices];
+				for (int i = 0; i < vtxCount; ++i)
 				{
-				case b2Shape::e_polygon:
-				{
-					b2PolygonShape* pShape = static_cast<b2PolygonShape*>(fixturePointer->GetShape());
-					int vtxCount = pShape->GetVertexCount();
-					POINT* vtxList = new POINT[vtxCount];
-					for (int i = 0; i < vtxCount; ++i)
-					{
-						vtxList[i].x = (pShape->GetVertex(i).x + pos.x)*PPU;
-						vtxList[i].y = (pShape->GetVertex(i).y + pos.y)*PPU;
-					}
-					Polygon(memDC, vtxList, vtxCount);
-					delete[] vtxList;
+					const b2Transform& tran = bodyPointer->GetTransform();
+					b2Vec2 tmpVec = b2Mul(tran, pShape->m_vertices[i]);
+					vtxList[i].x = (tmpVec.x)*PPU;
+					vtxList[i].y = (tmpVec.y)*PPU;
 				}
-				break;
-				}
+				Polygon(memDC, vtxList, vtxCount);
 			}
 		}
 
