@@ -13,6 +13,7 @@
 const float timeStep = 1 / 120.0f;
 b2World* world{ nullptr };
 DWORD prevTime{ 0 }, currentTime{ 0 };
+enum class GameState { NONE, CREATE_BODY, MOVE_BODY };
 
 // 전역 변수:
 HINSTANCE hInst;                                // 현재 인스턴스입니다.
@@ -142,6 +143,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static RECT cRect;
 	static const float PPU{ 15 }, FOLLOW_SPEED{ 10 };
 	static bool isLBtnDown{ false };
+	static GameState state{ GameState::NONE };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
 
@@ -180,7 +182,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	break;
 	case WM_TIMER:
 	{
-		if (isLBtnDown && !selectedObject.GetBody())
+		if (isLBtnDown && state == GameState::NONE)
+		{
+			b2Vec2 p{ mouseX, mouseY };
+			b2AABB aabb;
+			aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
+			aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
+
+			ClickQuery cq{ p };
+			world->QueryAABB(&cq, aabb);
+
+			if (cq.fixture)
+			{
+				selectedObject.SetBody(cq.fixture->GetBody());
+				selectedObject.SetTarget(p);
+				state = GameState::MOVE_BODY;
+			}
+			else
+				state = GameState::CREATE_BODY;
+		}
+
+		if (state == GameState::CREATE_BODY)
 		{
 			b2AABB aabb;
 			aabb.lowerBound.Set(mouseX - 0.5, mouseY - 0.5);
@@ -209,18 +231,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
-		auto body = selectedObject.GetBody();
-		if (body)
+		else if(state == GameState::MOVE_BODY)
 		{
-			b2Vec2 bPos = body->GetPosition();
-			auto& target = selectedObject.GetTarget();
-			if ((target - bPos).Length() < 0.1)
-				body->SetLinearVelocity(b2Vec2_zero);
-			else
+			auto body = selectedObject.GetBody();
+			if (body)
 			{
-				auto v = target - bPos;
-				v *= FOLLOW_SPEED;
-				body->SetLinearVelocity(v);
+				selectedObject.SetTarget(b2Vec2{ mouseX,mouseY });
+				b2Vec2 bPos = body->GetPosition();
+				auto& target = selectedObject.GetTarget();
+				if ((target - bPos).Length() < 0.1)
+					body->SetLinearVelocity(b2Vec2_zero);
+				else
+				{
+					auto v = target - bPos;
+					v *= FOLLOW_SPEED;
+					body->SetLinearVelocity(v);
+				}
 			}
 		}
 
@@ -235,35 +261,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		mouseY = y / PPU;
 		isLBtnDown = true;
 
-		b2Vec2 p{ mouseX, mouseY };
-		b2AABB aabb;
-		aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
-		aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
-
-		ClickQuery cq{ p };
-		world->QueryAABB(&cq, aabb);
-
-		if (cq.fixture)
-		{
-			selectedObject.SetBody(cq.fixture->GetBody());
-			selectedObject.SetTarget(p);
-		}
-
 		SetCapture(hWnd);
 	}
 	break;
 	case WM_MOUSEMOVE:
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
-
-		if (selectedObject.GetBody())
-		{
-			b2Vec2 mPos{ mouseX,mouseY };
-			selectedObject.SetTarget(mPos);
-		}
 		break;
 	case WM_LBUTTONUP:
 		isLBtnDown = false;
+		state = GameState::NONE;
 		selectedObject.SetBody(nullptr);
 		ReleaseCapture();
 		break;
