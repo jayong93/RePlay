@@ -5,15 +5,21 @@
 #include <windowsx.h>
 #include <memory>
 #include <list>
+#include <chrono>
 #include "include\Box2D.h"
 #include "Query.h"
 #include "Object.h"
+#include "Replay.h"
+
+using namespace std::chrono;
 
 #define MAX_LOADSTRING 100
 const float timeStep = 1 / 120.0f;
 b2World* world{ nullptr };
 DWORD prevTime{ 0 }, currentTime{ 0 };
 enum class GameState { NONE, CREATE_BODY, MOVE_BODY };
+std::list<ReplayData> rDataList;
+std::list<ReplayData>::iterator it;
 
 // 전역 변수:
 HINSTANCE hInst;                                // 현재 인스턴스입니다.
@@ -94,7 +100,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // 인스턴스 핸들을 전역 변수에 저장합니다.
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW & (~WS_THICKFRAME),
 		CW_USEDEFAULT, 0, 800, 600, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
@@ -146,11 +152,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static GameState state{ GameState::NONE };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
+	static time_point<system_clock> startTime;
+	time_point<system_clock> nowTime;
 
 	switch (message)
 	{
 	case WM_CREATE:
 	{
+		startTime = system_clock::now();
 		GetClientRect(hWnd, &cRect);
 
 		world = new b2World{ b2Vec2{ 0,0 } };
@@ -160,7 +169,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		InitWall(cRect, PPU);
 
-		SetTimer(hWnd, 16, 1, nullptr);
+		SetTimer(hWnd, 0, 16, nullptr);
 	}
 	break;
 	case WM_SIZE:
@@ -182,72 +191,112 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	break;
 	case WM_TIMER:
 	{
-		if (isLBtnDown && state == GameState::NONE)
+		switch (wParam)
 		{
-			b2Vec2 p{ mouseX, mouseY };
-			b2AABB aabb;
-			aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
-			aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
-
-			ClickQuery cq{ p };
-			world->QueryAABB(&cq, aabb);
-
-			if (cq.fixture)
+		case 0:
+			if (isLBtnDown && state == GameState::NONE)
 			{
-				selectedObject.SetBody(cq.fixture->GetBody());
-				selectedObject.SetTarget(p);
-				state = GameState::MOVE_BODY;
-			}
-			else
-				state = GameState::CREATE_BODY;
-		}
+				b2Vec2 p{ mouseX, mouseY };
+				b2AABB aabb;
+				aabb.lowerBound.Set(mouseX - 0.001, mouseY - 0.001);
+				aabb.upperBound.Set(mouseX + 0.001, mouseY + 0.001);
 
-		if (state == GameState::CREATE_BODY)
-		{
-			b2AABB aabb;
-			aabb.lowerBound.Set(mouseX - 0.5, mouseY - 0.5);
-			aabb.upperBound.Set(mouseX + 0.5, mouseY + 0.5);
+				ClickQuery cq{ p };
+				world->QueryAABB(&cq, aabb);
 
-			BoxQuery bq;
-			world->QueryAABB(&bq, aabb);
-			if (bq.canCreate)
-			{
-				b2BodyDef bodyDef;
-				b2PolygonShape shape;
-				bodyDef.type = b2_dynamicBody;
-				bodyDef.position.Set(mouseX, mouseY);
-				bodyDef.angularDamping = 1.0f;
-				bodyDef.linearDamping = 1.0f;
-				bodyDef.bullet = true;
-				auto b = world->CreateBody(&bodyDef);
-				shape.SetAsBox(0.5f, 0.5f);
-
-				b2FixtureDef fDef;
-				fDef.shape = &shape;
-				fDef.density = 5.0f;
-				fDef.restitution = 1.0f;
-				fDef.friction = 0.0f;
-				b->CreateFixture(&fDef);
-			}
-		}
-
-		else if(state == GameState::MOVE_BODY)
-		{
-			auto body = selectedObject.GetBody();
-			if (body)
-			{
-				selectedObject.SetTarget(b2Vec2{ mouseX,mouseY });
-				b2Vec2 bPos = body->GetPosition();
-				auto& target = selectedObject.GetTarget();
-				if ((target - bPos).Length() < 0.1)
-					body->SetLinearVelocity(b2Vec2_zero);
-				else
+				if (cq.fixture)
 				{
-					auto v = target - bPos;
-					v *= FOLLOW_SPEED;
-					body->SetLinearVelocity(v);
+					selectedObject.SetBody(cq.fixture->GetBody());
+					selectedObject.SetTarget(p);
+
+					// 리플레이 데이터 추가
+					float* data = new float[2];
+					data[0] = mouseX; data[1] = mouseY;
+					nowTime = system_clock::now();
+					rDataList.emplace_back(ReplayDataType::SELECT_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+
+					state = GameState::MOVE_BODY;
+				}
+				else
+					state = GameState::CREATE_BODY;
+			}
+
+			if (state == GameState::CREATE_BODY)
+			{
+				b2AABB aabb;
+				aabb.lowerBound.Set(mouseX - 0.5, mouseY - 0.5);
+				aabb.upperBound.Set(mouseX + 0.5, mouseY + 0.5);
+
+				BoxQuery bq;
+				world->QueryAABB(&bq, aabb);
+				if (bq.canCreate)
+				{
+					b2BodyDef bodyDef;
+					b2PolygonShape shape;
+					bodyDef.type = b2_dynamicBody;
+					bodyDef.position.Set(mouseX, mouseY);
+					bodyDef.angularDamping = 1.0f;
+					bodyDef.linearDamping = 1.0f;
+					bodyDef.bullet = true;
+					auto b = world->CreateBody(&bodyDef);
+					shape.SetAsBox(0.5f, 0.5f);
+
+					b2FixtureDef fDef;
+					fDef.shape = &shape;
+					fDef.density = 5.0f;
+					fDef.restitution = 1.0f;
+					fDef.friction = 0.0f;
+					b->CreateFixture(&fDef);
+
+					// 리플레이 데이터 추가
+					float* data = new float[2];
+					data[0] = mouseX; data[1] = mouseY;
+					nowTime = system_clock::now();
+					rDataList.emplace_back(ReplayDataType::CREATE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
 				}
 			}
+
+			else if (state == GameState::MOVE_BODY)
+			{
+				auto body = selectedObject.GetBody();
+				if (body)
+				{
+					selectedObject.SetTarget(b2Vec2{ mouseX,mouseY });
+					b2Vec2 bPos = body->GetPosition();
+					auto& target = selectedObject.GetTarget();
+					b2Vec2 vel;
+					if ((target - bPos).Length() < 0.1)
+						vel = b2Vec2_zero;
+					else
+					{
+						vel = target - bPos;
+						vel *= FOLLOW_SPEED;
+					}
+					body->SetLinearVelocity(vel);
+
+					// 리플레이 데이터 추가
+					float* data = new float[2];
+					data[0] = vel.x; data[1] = vel.y;
+					nowTime = system_clock::now();
+					rDataList.emplace_back(ReplayDataType::MOVE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+				}
+			}
+			break;
+
+		case 1:
+		{
+			if (it != rDataList.end())
+			{
+				nowTime = system_clock::now();
+				switch (it->type)
+				{
+				case ReplayDataType::CREATE_BODY:
+
+					break;
+				}
+			}
+		}
+		break;
 		}
 
 		InvalidateRect(hWnd, nullptr, false);
@@ -277,6 +326,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_KEYDOWN:
 		switch (wParam)
 		{
+		case 'Q':
+		{
+			b2Body* node = world->GetBodyList();
+			while (node)
+			{
+				b2Body* body = node;
+				node = node->GetNext();
+
+				if (body->GetType() == b2BodyType::b2_dynamicBody)
+					world->DestroyBody(body);
+			}
+			selectedObject.SetBody(nullptr);
+			isLBtnDown = false;
+
+			startTime = system_clock::now();
+			it = rDataList.begin();
+			KillTimer(hWnd, 0);
+			SetTimer(hWnd, 1, 16, nullptr);
+		}
+		break;
 		case 'R':
 		{
 			b2Body* node = world->GetBodyList();
@@ -290,6 +359,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			selectedObject.SetBody(nullptr);
 			isLBtnDown = false;
+			// 리플레이 데이터 추가
+			nowTime = system_clock::now();
+			rDataList.emplace_back(ReplayDataType::RESET, (nowTime - startTime).count(), 0, nullptr);
 		}
 		break;
 		}

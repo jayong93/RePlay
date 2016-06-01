@@ -1,10 +1,10 @@
 ﻿  main.cpp
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(189): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(190): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(208): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(209): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(258): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(259): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(320): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(321): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(197): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(198): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(223): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(224): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(286): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(287): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(351): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+c:\users\jayon\documents\visual studio 2015\projects\stl\stlreplayproject\main.cpp(352): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
   STLReplayProject.vcxproj -> C:\Users\jayon\documents\visual studio 2015\Projects\STL\Debug\STLReplayProject.exe
