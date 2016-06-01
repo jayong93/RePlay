@@ -169,7 +169,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		InitWall(cRect, PPU);
 
-		SetTimer(hWnd, 0, 16, nullptr);
+		SetTimer(hWnd, 0, 1, nullptr);
 	}
 	break;
 	case WM_SIZE:
@@ -273,12 +273,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						vel *= FOLLOW_SPEED;
 					}
 					body->SetLinearVelocity(vel);
-
-					// 리플레이 데이터 추가
-					float* data = new float[2];
-					data[0] = vel.x; data[1] = vel.y;
-					nowTime = system_clock::now();
-					rDataList.emplace_back(ReplayDataType::MOVE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
 				}
 			}
 			break;
@@ -288,7 +282,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (it != rDataList.end())
 			{
 				nowTime = system_clock::now();
-				if ((nowTime - startTime).count() >= it->timePoint)
+				while (it != rDataList.end() && (nowTime - startTime).count() >= it->timePoint)
 				{
 					switch (it->type)
 					{
@@ -337,7 +331,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						if (body)
 						{
 							float* data = (float*)it->data;
-							b2Vec2 vel{ data[0],data[1] };
+							selectedObject.SetTarget(b2Vec2{ data[0],data[1] });
+							b2Vec2 bPos = body->GetPosition();
+							auto& target = selectedObject.GetTarget();
+							b2Vec2 vel;
+							if ((target - bPos).Length() < 0.1)
+								vel = b2Vec2_zero;
+							else
+							{
+								vel = target - bPos;
+								vel *= FOLLOW_SPEED;
+							}
 							body->SetLinearVelocity(vel);
 						}
 					}
@@ -352,7 +356,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				state = GameState::NONE;
 				selectedObject.SetBody(nullptr);
 				isLBtnDown = false;
-				SetTimer(hWnd, 0, 16, nullptr);
+				SetTimer(hWnd, 0, 1, nullptr);
 			}
 		}
 		break;
@@ -375,6 +379,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_MOUSEMOVE:
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
+
+		if (selectedObject.GetBody())
+		{
+			// 리플레이 데이터 추가
+			float* data = new float[2];
+			data[0] = mouseX; data[1] = mouseY;
+			nowTime = system_clock::now();
+			rDataList.emplace_back(ReplayDataType::MOVE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+		}
 		break;
 	case WM_LBUTTONUP:
 		isLBtnDown = false;
@@ -402,7 +415,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			startTime = system_clock::now();
 			it = rDataList.begin();
 			KillTimer(hWnd, 0);
-			SetTimer(hWnd, 1, 16, nullptr);
+			SetTimer(hWnd, 1, 1, nullptr);
 		}
 		break;
 		case 'R':
