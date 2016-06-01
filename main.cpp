@@ -288,12 +288,71 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (it != rDataList.end())
 			{
 				nowTime = system_clock::now();
-				switch (it->type)
+				if ((nowTime - startTime).count() >= it->timePoint)
 				{
-				case ReplayDataType::CREATE_BODY:
+					switch (it->type)
+					{
+					case ReplayDataType::CREATE_BODY:
+					{
+						float* data = (float*)it->data;
+						b2BodyDef bodyDef;
+						b2PolygonShape shape;
+						bodyDef.type = b2_dynamicBody;
+						bodyDef.position.Set(data[0], data[1]);
+						bodyDef.angularDamping = 1.0f;
+						bodyDef.linearDamping = 1.0f;
+						bodyDef.bullet = true;
+						auto b = world->CreateBody(&bodyDef);
+						shape.SetAsBox(0.5f, 0.5f);
 
+						b2FixtureDef fDef;
+						fDef.shape = &shape;
+						fDef.density = 5.0f;
+						fDef.restitution = 1.0f;
+						fDef.friction = 0.0f;
+						b->CreateFixture(&fDef);
+					}
 					break;
+					case ReplayDataType::SELECT_BODY:
+					{
+						float* data = (float*)it->data;
+						b2Vec2 p{ data[0], data[1] };
+						b2AABB aabb;
+						aabb.lowerBound.Set(data[0] - 0.001, data[1] - 0.001);
+						aabb.upperBound.Set(data[0] + 0.001, data[1] + 0.001);
+
+						ClickQuery cq{ p };
+						world->QueryAABB(&cq, aabb);
+
+						if (cq.fixture)
+						{
+							selectedObject.SetBody(cq.fixture->GetBody());
+							selectedObject.SetTarget(p);
+						}
+					}
+					break;
+					case ReplayDataType::MOVE_BODY:
+					{
+						auto body = selectedObject.GetBody();
+						if (body)
+						{
+							float* data = (float*)it->data;
+							b2Vec2 vel{ data[0],data[1] };
+							body->SetLinearVelocity(vel);
+						}
+					}
+					break;
+					}
+					++it;
 				}
+			}
+			else
+			{
+				KillTimer(hWnd, 1);
+				state = GameState::NONE;
+				selectedObject.SetBody(nullptr);
+				isLBtnDown = false;
+				SetTimer(hWnd, 0, 16, nullptr);
 			}
 		}
 		break;
@@ -357,6 +416,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (body->GetType() == b2BodyType::b2_dynamicBody)
 					world->DestroyBody(body);
 			}
+			state = GameState::NONE;
 			selectedObject.SetBody(nullptr);
 			isLBtnDown = false;
 			// 리플레이 데이터 추가
