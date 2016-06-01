@@ -6,10 +6,12 @@
 #include <memory>
 #include <list>
 #include <chrono>
+#include <fstream>
 #include "include\Box2D.h"
 #include "Query.h"
 #include "Object.h"
 #include "Replay.h"
+#include "resource.h"
 
 using namespace std::chrono;
 
@@ -101,7 +103,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // 인스턴스 핸들을 전역 변수에 저장합니다.
 
 	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW & (~WS_THICKFRAME),
-		CW_USEDEFAULT, 0, 800, 600, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, 800, 600, nullptr, LoadMenu(hInst, MAKEINTRESOURCE(IDR_MENU1)), hInstance, nullptr);
 
 	if (!hWnd)
 	{
@@ -148,7 +150,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static RECT cRect;
 	static const float PPU{ 15 }, FOLLOW_SPEED{ 10 };
-	static bool isLBtnDown{ false };
+	static bool isLBtnDown{ false }, isRecoding{ false };
 	static GameState state{ GameState::NONE };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
@@ -159,7 +161,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_CREATE:
 	{
-		startTime = system_clock::now();
 		GetClientRect(hWnd, &cRect);
 
 		world = new b2World{ b2Vec2{ 0,0 } };
@@ -189,6 +190,47 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		InitWall(cRect, PPU);
 	}
 	break;
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case ID_FILE_OPEN:
+
+			break;
+		case ID_FILE_SAVE:
+
+			break;
+		case ID_REC_START:
+			isRecoding = true;
+			startTime = system_clock::now();
+			break;
+		case ID_REC_STOP:
+			isRecoding = false;
+			break;
+		case ID_RESET:
+			rDataList.clear();
+			break;
+		case ID_PLAY:
+		{
+			b2Body* node = world->GetBodyList();
+			while (node)
+			{
+				b2Body* body = node;
+				node = node->GetNext();
+
+				if (body->GetType() == b2BodyType::b2_dynamicBody)
+					world->DestroyBody(body);
+			}
+			selectedObject.SetBody(nullptr);
+			isLBtnDown = false;
+
+			startTime = system_clock::now();
+			it = rDataList.begin();
+			KillTimer(hWnd, 0);
+			SetTimer(hWnd, 1, 1, nullptr);
+		}
+		break;
+		}
+		break;
 	case WM_TIMER:
 	{
 		switch (wParam)
@@ -210,10 +252,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					selectedObject.SetTarget(p);
 
 					// 리플레이 데이터 추가
-					float* data = new float[2];
-					data[0] = mouseX; data[1] = mouseY;
-					nowTime = system_clock::now();
-					rDataList.emplace_back(ReplayDataType::SELECT_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+					if (isRecoding)
+					{
+						float* data = new float[2];
+						data[0] = mouseX; data[1] = mouseY;
+						nowTime = system_clock::now();
+						rDataList.emplace_back(ReplayDataType::SELECT_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+					}
 
 					state = GameState::MOVE_BODY;
 				}
@@ -249,10 +294,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					b->CreateFixture(&fDef);
 
 					// 리플레이 데이터 추가
-					float* data = new float[2];
-					data[0] = mouseX; data[1] = mouseY;
-					nowTime = system_clock::now();
-					rDataList.emplace_back(ReplayDataType::CREATE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+					if (isRecoding)
+					{
+						float* data = new float[2];
+						data[0] = mouseX; data[1] = mouseY;
+						nowTime = system_clock::now();
+						rDataList.emplace_back(ReplayDataType::CREATE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+					}
 				}
 			}
 
@@ -380,7 +428,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
 
-		if (selectedObject.GetBody())
+		if (selectedObject.GetBody() && isRecoding)
 		{
 			// 리플레이 데이터 추가
 			float* data = new float[2];
@@ -398,26 +446,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_KEYDOWN:
 		switch (wParam)
 		{
-		case 'Q':
-		{
-			b2Body* node = world->GetBodyList();
-			while (node)
-			{
-				b2Body* body = node;
-				node = node->GetNext();
-
-				if (body->GetType() == b2BodyType::b2_dynamicBody)
-					world->DestroyBody(body);
-			}
-			selectedObject.SetBody(nullptr);
-			isLBtnDown = false;
-
-			startTime = system_clock::now();
-			it = rDataList.begin();
-			KillTimer(hWnd, 0);
-			SetTimer(hWnd, 1, 1, nullptr);
-		}
-		break;
 		case 'R':
 		{
 			b2Body* node = world->GetBodyList();
@@ -433,8 +461,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			selectedObject.SetBody(nullptr);
 			isLBtnDown = false;
 			// 리플레이 데이터 추가
-			nowTime = system_clock::now();
-			rDataList.emplace_back(ReplayDataType::RESET, (nowTime - startTime).count(), 0, nullptr);
+			if (isRecoding)
+			{
+				nowTime = system_clock::now();
+				rDataList.emplace_back(ReplayDataType::RESET, (nowTime - startTime).count(), 0, nullptr);
+			}
 		}
 		break;
 		}
