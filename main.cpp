@@ -102,7 +102,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // 인스턴스 핸들을 전역 변수에 저장합니다.
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW & (~WS_THICKFRAME),
+	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX),
 		CW_USEDEFAULT, 0, 800, 600, nullptr, LoadMenu(hInst, MAKEINTRESOURCE(IDR_MENU1)), hInstance, nullptr);
 
 	if (!hWnd)
@@ -116,34 +116,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
-void InitWall(const RECT& cRect, const float PPU)
+void ClearWorld()
 {
-	b2PolygonShape shape;
-	b2BodyDef bodyDef;
-	b2FixtureDef fDef;
-	fDef.shape = &shape;
-	fDef.density = 5.0f;
-	fDef.restitution = 1.0f;
-	fDef.friction = 0.0f;
+	b2Body* node = world->GetBodyList();
+	while (node)
+	{
+		b2Body* body = node;
+		node = node->GetNext();
 
-
-	shape.SetAsBox(0.5f, cRect.bottom / 2.0f / PPU);
-	bodyDef.position.Set(cRect.right / PPU + 0.5f, cRect.bottom / 2.0f / PPU);
-	auto b = world->CreateBody(&bodyDef);
-	b->CreateFixture(&fDef);
-
-	bodyDef.position.Set(-0.5f, cRect.bottom / 2.0f / PPU);
-	b = world->CreateBody(&bodyDef);
-	b->CreateFixture(&fDef);
-
-	shape.SetAsBox(cRect.right / 2.0f / PPU, 0.5f);
-	bodyDef.position.Set(cRect.right / 2.0f / PPU, cRect.bottom / PPU + 0.5f);
-	b = world->CreateBody(&bodyDef);
-	b->CreateFixture(&fDef);
-
-	bodyDef.position.Set(cRect.right / 2.0f / PPU, -0.5f);
-	b = world->CreateBody(&bodyDef);
-	b->CreateFixture(&fDef);
+		if (body->GetType() == b2BodyType::b2_dynamicBody)
+			world->DestroyBody(body);
+	}
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -167,26 +150,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		world->SetWarmStarting(true);
 		world->SetContinuousPhysics(true);
 
-		InitWall(cRect, PPU);
+		b2PolygonShape shape;
+		b2BodyDef bodyDef;
+		b2FixtureDef fDef;
+		fDef.shape = &shape;
+		fDef.density = 5.0f;
+		fDef.restitution = 1.0f;
+		fDef.friction = 0.0f;
+
+		shape.SetAsBox(0.5f, cRect.bottom / 2.0f / PPU);
+		bodyDef.position.Set(cRect.right / PPU + 0.5f, cRect.bottom / 2.0f / PPU);
+		auto b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		bodyDef.position.Set(-0.5f, cRect.bottom / 2.0f / PPU);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		shape.SetAsBox(cRect.right / 2.0f / PPU, 0.5f);
+		bodyDef.position.Set(cRect.right / 2.0f / PPU, cRect.bottom / PPU + 0.5f);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
+
+		bodyDef.position.Set(cRect.right / 2.0f / PPU, -0.5f);
+		b = world->CreateBody(&bodyDef);
+		b->CreateFixture(&fDef);
 
 		SetTimer(hWnd, 0, 1, nullptr);
-	}
-	break;
-	case WM_SIZE:
-	{
-		GetClientRect(hWnd, &cRect);
-
-		b2Body* node = world->GetBodyList();
-		while (node)
-		{
-			b2Body* body = node;
-			node = node->GetNext();
-
-			if (body->GetType() == b2BodyType::b2_staticBody)
-				world->DestroyBody(body);
-		}
-
-		InitWall(cRect, PPU);
 	}
 	break;
 	case WM_COMMAND:
@@ -255,15 +245,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case ID_REC_START:
 			if (!isReplaying)
 			{
-				b2Body* node = world->GetBodyList();
-				while (node)
-				{
-					b2Body* body = node;
-					node = node->GetNext();
-
-					if (body->GetType() == b2BodyType::b2_dynamicBody)
-						world->DestroyBody(body);
-				}
+				ClearWorld();
 				selectedObject.SetBody(nullptr);
 				isLBtnDown = false;
 				rDataList.clear();
@@ -282,15 +264,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (!isRecoding && rDataList.size() > 0)
 			{
-				b2Body* node = world->GetBodyList();
-				while (node)
-				{
-					b2Body* body = node;
-					node = node->GetNext();
-
-					if (body->GetType() == b2BodyType::b2_dynamicBody)
-						world->DestroyBody(body);
-				}
+				ClearWorld();
 				selectedObject.SetBody(nullptr);
 				isLBtnDown = false;
 
@@ -465,15 +439,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 				case ReplayDataType::RESET:
 				{
-					b2Body* node = world->GetBodyList();
-					while (node)
-					{
-						b2Body* body = node;
-						node = node->GetNext();
-
-						if (body->GetType() == b2BodyType::b2_dynamicBody)
-							world->DestroyBody(body);
-					}
+					ClearWorld();
 					selectedObject.SetBody(nullptr);
 				}
 				break;
@@ -529,15 +495,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			if (!isReplaying)
 			{
-				b2Body* node = world->GetBodyList();
-				while (node)
-				{
-					b2Body* body = node;
-					node = node->GetNext();
-
-					if (body->GetType() == b2BodyType::b2_dynamicBody)
-						world->DestroyBody(body);
-				}
+				ClearWorld();
 				state = GameState::NONE;
 				selectedObject.SetBody(nullptr);
 				isLBtnDown = false;
@@ -607,6 +565,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	break;
 	case WM_DESTROY:
+		delete world;
 		PostQuitMessage(0);
 		break;
 	default:
