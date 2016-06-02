@@ -205,8 +205,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						in.read((char*)&rd.type, sizeof(rd.type));
 						in.read((char*)&rd.timePoint, sizeof(rd.timePoint));
 						in.read((char*)&rd.nByte, sizeof(rd.nByte));
-						rd.data = new char[rd.nByte];
-						in.read((char*)rd.data, rd.nByte);
+						if (rd.nByte > 0)
+						{
+							rd.data = new char[rd.nByte];
+							in.read((char*)rd.data, rd.nByte);
+						}
 						rDataList.emplace_back(rd);
 					}
 				}
@@ -235,7 +238,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					out.write((char*)&d.type, sizeof(d.type));
 					out.write((char*)&d.timePoint, sizeof(d.timePoint));
 					out.write((char*)&d.nByte, sizeof(d.nByte));
-					out.write((char*)d.data, d.nByte);
+					if (d.nByte > 0)
+						out.write((char*)d.data, d.nByte);
 				}
 			}
 		}
