@@ -1,15 +1,1 @@
-﻿  main.cpp
-main.cpp(292): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(293): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(320): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(321): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(419): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(420): warning C4244: '인수': 'double'에서 'float32'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(474): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(475): warning C4244: '초기화 중': 'int'에서 'float'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(557): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-main.cpp(558): warning C4244: '=': 'float32'에서 'LONG'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-  코드를 생성하고 있습니다.
-  All 296 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
-  코드를 생성했습니다.
-  STLReplayProject.vcxproj -> C:\Users\jayon\Documents\Visual Studio 2015\Projects\STL\Release\STLReplayProject.exe
+﻿
