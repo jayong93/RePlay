@@ -154,8 +154,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	static GameState state{ GameState::NONE };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
-	static time_point<system_clock> startTime;
-	time_point<system_clock> nowTime;
+	static long long frameCount;
 
 	switch (message)
 	{
@@ -201,7 +200,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case ID_REC_START:
 			isRecoding = true;
-			startTime = system_clock::now();
+			frameCount = 0;
 			break;
 		case ID_REC_STOP:
 			isRecoding = false;
@@ -211,22 +210,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case ID_PLAY:
 		{
-			b2Body* node = world->GetBodyList();
-			while (node)
+			if (!isRecoding)
 			{
-				b2Body* body = node;
-				node = node->GetNext();
+				b2Body* node = world->GetBodyList();
+				while (node)
+				{
+					b2Body* body = node;
+					node = node->GetNext();
 
-				if (body->GetType() == b2BodyType::b2_dynamicBody)
-					world->DestroyBody(body);
+					if (body->GetType() == b2BodyType::b2_dynamicBody)
+						world->DestroyBody(body);
+				}
+				selectedObject.SetBody(nullptr);
+				isLBtnDown = false;
+
+				frameCount = 0;
+				it = rDataList.begin();
+				KillTimer(hWnd, 0);
+				SetTimer(hWnd, 1, 1, nullptr);
 			}
-			selectedObject.SetBody(nullptr);
-			isLBtnDown = false;
-
-			startTime = system_clock::now();
-			it = rDataList.begin();
-			KillTimer(hWnd, 0);
-			SetTimer(hWnd, 1, 1, nullptr);
 		}
 		break;
 		}
@@ -256,8 +258,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					{
 						float* data = new float[2];
 						data[0] = mouseX; data[1] = mouseY;
-						nowTime = system_clock::now();
-						rDataList.emplace_back(ReplayDataType::SELECT_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+						rDataList.emplace_back(ReplayDataType::SELECT_BODY, frameCount, sizeof(float) * 2, data);
 					}
 
 					state = GameState::MOVE_BODY;
@@ -298,8 +299,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					{
 						float* data = new float[2];
 						data[0] = mouseX; data[1] = mouseY;
-						nowTime = system_clock::now();
-						rDataList.emplace_back(ReplayDataType::CREATE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
+						rDataList.emplace_back(ReplayDataType::CREATE_BODY, frameCount, sizeof(float) * 2, data);
 					}
 				}
 			}
@@ -321,84 +321,83 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						vel *= FOLLOW_SPEED;
 					}
 					body->SetLinearVelocity(vel);
+
+					if (isRecoding)
+					{
+						// 리플레이 데이터 추가
+						float* data = new float[2];
+						data[0] = vel.x; data[1] = vel.y;
+						rDataList.emplace_back(ReplayDataType::MOVE_BODY, frameCount, sizeof(float) * 2, data);
+					}
 				}
 			}
+
+			if (isRecoding)
+				frameCount++;
+
 			break;
 
 		case 1:
 		{
-			if (it != rDataList.end())
+			while (it != rDataList.end() && frameCount == it->timePoint)
 			{
-				nowTime = system_clock::now();
-				while (it != rDataList.end() && (nowTime - startTime).count() >= it->timePoint)
+				switch (it->type)
 				{
-					switch (it->type)
-					{
-					case ReplayDataType::CREATE_BODY:
-					{
-						float* data = (float*)it->data;
-						b2BodyDef bodyDef;
-						b2PolygonShape shape;
-						bodyDef.type = b2_dynamicBody;
-						bodyDef.position.Set(data[0], data[1]);
-						bodyDef.angularDamping = 1.0f;
-						bodyDef.linearDamping = 1.0f;
-						bodyDef.bullet = true;
-						auto b = world->CreateBody(&bodyDef);
-						shape.SetAsBox(0.5f, 0.5f);
+				case ReplayDataType::CREATE_BODY:
+				{
+					float* data = (float*)it->data;
+					b2BodyDef bodyDef;
+					b2PolygonShape shape;
+					bodyDef.type = b2_dynamicBody;
+					bodyDef.position.Set(data[0], data[1]);
+					bodyDef.angularDamping = 1.0f;
+					bodyDef.linearDamping = 1.0f;
+					bodyDef.bullet = true;
+					auto b = world->CreateBody(&bodyDef);
+					shape.SetAsBox(0.5f, 0.5f);
 
-						b2FixtureDef fDef;
-						fDef.shape = &shape;
-						fDef.density = 5.0f;
-						fDef.restitution = 1.0f;
-						fDef.friction = 0.0f;
-						b->CreateFixture(&fDef);
-					}
-					break;
-					case ReplayDataType::SELECT_BODY:
-					{
-						float* data = (float*)it->data;
-						b2Vec2 p{ data[0], data[1] };
-						b2AABB aabb;
-						aabb.lowerBound.Set(data[0] - 0.001, data[1] - 0.001);
-						aabb.upperBound.Set(data[0] + 0.001, data[1] + 0.001);
-
-						ClickQuery cq{ p };
-						world->QueryAABB(&cq, aabb);
-
-						if (cq.fixture)
-						{
-							selectedObject.SetBody(cq.fixture->GetBody());
-							selectedObject.SetTarget(p);
-						}
-					}
-					break;
-					case ReplayDataType::MOVE_BODY:
-					{
-						auto body = selectedObject.GetBody();
-						if (body)
-						{
-							float* data = (float*)it->data;
-							selectedObject.SetTarget(b2Vec2{ data[0],data[1] });
-							b2Vec2 bPos = body->GetPosition();
-							auto& target = selectedObject.GetTarget();
-							b2Vec2 vel;
-							if ((target - bPos).Length() < 0.1)
-								vel = b2Vec2_zero;
-							else
-							{
-								vel = target - bPos;
-								vel *= FOLLOW_SPEED;
-							}
-							body->SetLinearVelocity(vel);
-						}
-					}
-					break;
-					}
-					++it;
+					b2FixtureDef fDef;
+					fDef.shape = &shape;
+					fDef.density = 5.0f;
+					fDef.restitution = 1.0f;
+					fDef.friction = 0.0f;
+					b->CreateFixture(&fDef);
 				}
+				break;
+				case ReplayDataType::SELECT_BODY:
+				{
+					float* data = (float*)it->data;
+					b2Vec2 p{ data[0], data[1] };
+					b2AABB aabb;
+					aabb.lowerBound.Set(data[0] - 0.001, data[1] - 0.001);
+					aabb.upperBound.Set(data[0] + 0.001, data[1] + 0.001);
+
+					ClickQuery cq{ p };
+					world->QueryAABB(&cq, aabb);
+
+					if (cq.fixture)
+					{
+						selectedObject.SetBody(cq.fixture->GetBody());
+					}
+				}
+				break;
+				case ReplayDataType::MOVE_BODY:
+				{
+					auto body = selectedObject.GetBody();
+					if (body)
+					{
+						float* data = (float*)it->data;
+						b2Vec2 vel{ data[0],data[1] };
+						body->SetLinearVelocity(vel);
+					}
+				}
+				break;
+				}
+				++it;
 			}
-			else
+			frameCount++;
+
+			if (it == rDataList.end())
 			{
 				KillTimer(hWnd, 1);
 				state = GameState::NONE;
@@ -427,15 +426,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_MOUSEMOVE:
 		mouseX = GET_X_LPARAM(lParam) / PPU;
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
-
-		if (selectedObject.GetBody() && isRecoding)
-		{
-			// 리플레이 데이터 추가
-			float* data = new float[2];
-			data[0] = mouseX; data[1] = mouseY;
-			nowTime = system_clock::now();
-			rDataList.emplace_back(ReplayDataType::MOVE_BODY, (nowTime - startTime).count(), sizeof(float) * 2, data);
-		}
 		break;
 	case WM_LBUTTONUP:
 		isLBtnDown = false;
@@ -463,8 +453,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			// 리플레이 데이터 추가
 			if (isRecoding)
 			{
-				nowTime = system_clock::now();
-				rDataList.emplace_back(ReplayDataType::RESET, (nowTime - startTime).count(), 0, nullptr);
+				rDataList.emplace_back(ReplayDataType::RESET, frameCount, 0, nullptr);
 			}
 		}
 		break;
