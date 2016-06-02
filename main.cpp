@@ -150,7 +150,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static RECT cRect;
 	static const float PPU{ 15 }, FOLLOW_SPEED{ 10 };
-	static bool isLBtnDown{ false }, isRecoding{ false };
+	static bool isLBtnDown{ false }, isRecoding{ false }, isReplaying{ false };
 	static GameState state{ GameState::NONE };
 	static float mouseX, mouseY;
 	static MovingBox selectedObject{ nullptr };
@@ -193,14 +193,84 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		switch (LOWORD(wParam))
 		{
 		case ID_FILE_OPEN:
-
-			break;
+		{
+			TCHAR buf[256];
+			OPENFILENAME ofn;
+			memset(&ofn, 0, sizeof(ofn));
+			buf[0] = 0;
+			ofn.lStructSize = sizeof(ofn);
+			ofn.hwndOwner = hWnd;
+			ofn.lpstrFilter = TEXT("리플레이 데이터(*.rep)\0*.rep\0");
+			ofn.lpstrFile = buf;
+			ofn.nMaxFile = 256;
+			if (GetOpenFileName(&ofn))
+			{
+				std::ifstream in{ buf, std::ios::in | std::ios::binary };
+				int len;
+				in.read((char*)&len, sizeof(len));
+				if (len != 0)
+				{
+					rDataList.clear();
+					ReplayData rd;
+					for (int i = 0; i < len; ++i)
+					{
+						in.read((char*)&rd.type, sizeof(rd.type));
+						in.read((char*)&rd.timePoint, sizeof(rd.timePoint));
+						in.read((char*)&rd.nByte, sizeof(rd.nByte));
+						rd.data = new char[rd.nByte];
+						in.read((char*)rd.data, rd.nByte);
+						rDataList.emplace_back(rd);
+					}
+				}
+			}
+		}
+		break;
 		case ID_FILE_SAVE:
-
-			break;
+		{
+			TCHAR buf[256];
+			OPENFILENAME ofn;
+			memset(&ofn, 0, sizeof(OPENFILENAME));
+			buf[0] = 0;
+			ofn.lStructSize = sizeof(OPENFILENAME);
+			ofn.hwndOwner = hWnd;
+			ofn.lpstrFilter = TEXT("리플레이 데이터(*.rep)\0*.rep\0");
+			ofn.lpstrFile = buf;
+			ofn.nMaxFile = 256;
+			if (GetSaveFileName(&ofn))
+			{
+				if (ofn.nFileExtension == 0) lstrcat(buf, TEXT(".rep"));
+				std::ofstream out{ buf, std::ios::binary };
+				int len = rDataList.size();
+				out.write((char*)&len, sizeof(len));
+				for (auto& d : rDataList)
+				{
+					out.write((char*)&d.type, sizeof(d.type));
+					out.write((char*)&d.timePoint, sizeof(d.timePoint));
+					out.write((char*)&d.nByte, sizeof(d.nByte));
+					out.write((char*)d.data, d.nByte);
+				}
+			}
+		}
+		break;
 		case ID_REC_START:
-			isRecoding = true;
-			frameCount = 0;
+			if (!isReplaying)
+			{
+				b2Body* node = world->GetBodyList();
+				while (node)
+				{
+					b2Body* body = node;
+					node = node->GetNext();
+
+					if (body->GetType() == b2BodyType::b2_dynamicBody)
+						world->DestroyBody(body);
+				}
+				selectedObject.SetBody(nullptr);
+				isLBtnDown = false;
+				rDataList.clear();
+
+				isRecoding = true;
+				frameCount = 0;
+			}
 			break;
 		case ID_REC_STOP:
 			isRecoding = false;
@@ -210,7 +280,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case ID_PLAY:
 		{
-			if (!isRecoding)
+			if (!isRecoding && rDataList.size() > 0)
 			{
 				b2Body* node = world->GetBodyList();
 				while (node)
@@ -227,6 +297,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				frameCount = 0;
 				it = rDataList.begin();
 				KillTimer(hWnd, 0);
+				isReplaying = true;
 				SetTimer(hWnd, 1, 1, nullptr);
 			}
 		}
@@ -392,6 +463,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					}
 				}
 				break;
+				case ReplayDataType::RESET:
+				{
+					b2Body* node = world->GetBodyList();
+					while (node)
+					{
+						b2Body* body = node;
+						node = node->GetNext();
+
+						if (body->GetType() == b2BodyType::b2_dynamicBody)
+							world->DestroyBody(body);
+					}
+					selectedObject.SetBody(nullptr);
+				}
+				break;
 				}
 				++it;
 			}
@@ -403,6 +488,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				state = GameState::NONE;
 				selectedObject.SetBody(nullptr);
 				isLBtnDown = false;
+				isReplaying = false;
 				SetTimer(hWnd, 0, 1, nullptr);
 			}
 		}
@@ -418,7 +504,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		float y = GET_Y_LPARAM(lParam);
 		mouseX = x / PPU;
 		mouseY = y / PPU;
-		isLBtnDown = true;
+		if (!isReplaying) isLBtnDown = true;
 
 		SetCapture(hWnd);
 	}
@@ -428,9 +514,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		mouseY = GET_Y_LPARAM(lParam) / PPU;
 		break;
 	case WM_LBUTTONUP:
-		isLBtnDown = false;
-		state = GameState::NONE;
-		selectedObject.SetBody(nullptr);
+		if (!isReplaying)
+		{
+			isLBtnDown = false;
+			state = GameState::NONE;
+			selectedObject.SetBody(nullptr);
+		}
 		ReleaseCapture();
 		break;
 	case WM_KEYDOWN:
@@ -438,22 +527,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 		case 'R':
 		{
-			b2Body* node = world->GetBodyList();
-			while (node)
+			if (!isReplaying)
 			{
-				b2Body* body = node;
-				node = node->GetNext();
+				b2Body* node = world->GetBodyList();
+				while (node)
+				{
+					b2Body* body = node;
+					node = node->GetNext();
 
-				if (body->GetType() == b2BodyType::b2_dynamicBody)
-					world->DestroyBody(body);
-			}
-			state = GameState::NONE;
-			selectedObject.SetBody(nullptr);
-			isLBtnDown = false;
-			// 리플레이 데이터 추가
-			if (isRecoding)
-			{
-				rDataList.emplace_back(ReplayDataType::RESET, frameCount, 0, nullptr);
+					if (body->GetType() == b2BodyType::b2_dynamicBody)
+						world->DestroyBody(body);
+				}
+				state = GameState::NONE;
+				selectedObject.SetBody(nullptr);
+				isLBtnDown = false;
+				// 리플레이 데이터 추가
+				if (isRecoding)
+				{
+					rDataList.emplace_back(ReplayDataType::RESET, frameCount, 0, nullptr);
+				}
 			}
 		}
 		break;
@@ -467,6 +559,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		HBITMAP memBit = CreateCompatibleBitmap(hdc, cRect.right, cRect.bottom);
 		SelectObject(memDC, memBit);
 		FillRect(memDC, &cRect, (HBRUSH)GetStockObject(WHITE_BRUSH));
+
+		if (isReplaying)
+		{
+			auto oldColor = SetTextColor(memDC, RGB(255, 0, 0));
+			RECT crt; GetClientRect(hWnd, &crt);
+			TextOut(memDC, crt.right - 100, crt.bottom - 40, L"리플레이", 4);
+			SetTextColor(memDC, oldColor);
+		}
+		else if (isRecoding)
+		{
+			auto oldColor = SetTextColor(memDC, RGB(255, 0, 0));
+			RECT crt; GetClientRect(hWnd, &crt);
+			TextOut(memDC, crt.right - 100, crt.bottom - 40, L"녹화중", 3);
+			SetTextColor(memDC, oldColor);
+		}
 
 		b2Body* bodyPointer = world->GetBodyList();
 		for (; bodyPointer != nullptr; bodyPointer = bodyPointer->GetNext())
