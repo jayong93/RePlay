@@ -5,15 +5,12 @@
 #include <windowsx.h>
 #include <memory>
 #include <list>
-#include <chrono>
 #include <fstream>
 #include "include\Box2D.h"
 #include "Query.h"
 #include "Object.h"
 #include "Replay.h"
 #include "resource.h"
-
-using namespace std::chrono;
 
 #define MAX_LOADSTRING 100
 const float timeStep = 1 / 120.0f;
@@ -522,8 +519,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (isReplaying)
 		{
 			auto oldColor = SetTextColor(memDC, RGB(255, 0, 0));
-			RECT crt; GetClientRect(hWnd, &crt);
-			TextOut(memDC, crt.right - 100, crt.bottom - 40, L"리플레이", 4);
+			TextOut(memDC, cRect.right - 100, cRect.bottom - 40, L"리플레이", 4);
 			SetTextColor(memDC, oldColor);
 		}
 		else if (isRecoding)
