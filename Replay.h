@@ -1,6 +1,6 @@
 #pragma once
 
-enum class ReplayDataType { NONE, CREATE_BODY, MOVE_BODY, SELECT_BODY, RESET };
+enum class ReplayDataType { NONE, CREATE_BODY, MOVE_BODY, SELECT_BODY, UNSELECT_BODY, RESET };
 
 struct ReplayData
 {

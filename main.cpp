@@ -441,6 +441,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					selectedObject.SetBody(nullptr);
 				}
 				break;
+				case ReplayDataType::UNSELECT_BODY:
+					selectedObject.SetBody(nullptr);
+					break;
 				}
 				++it;
 			}
@@ -483,6 +486,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			isLBtnDown = false;
 			state = GameState::NONE;
 			selectedObject.SetBody(nullptr);
+			if (isRecoding)
+			{
+				rDataList.emplace_back(ReplayDataType::UNSELECT_BODY, frameCount, 0, nullptr);
+			}
 		}
 		ReleaseCapture();
 		break;
@@ -525,8 +532,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		else if (isRecoding)
 		{
 			auto oldColor = SetTextColor(memDC, RGB(255, 0, 0));
-			RECT crt; GetClientRect(hWnd, &crt);
-			TextOut(memDC, crt.right - 100, crt.bottom - 40, L"³ìÈ­Áß", 3);
+			TextOut(memDC, cRect.right - 100, cRect.bottom - 40, L"³ìÈ­Áß", 3);
 			SetTextColor(memDC, oldColor);
 		}
 
@@ -547,11 +553,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					vtxList[i].x = (tmpVec.x)*PPU;
 					vtxList[i].y = (tmpVec.y)*PPU;
 				}
-				if (bodyPointer->IsAwake())
+
+				HGDIOBJ oldBrush{ 0 };
+				if (selectedObject.GetBody() == bodyPointer)
+					oldBrush = SelectObject(memDC, CreateSolidBrush(RGB(200, 0, 0)));
+				else if (bodyPointer->IsAwake())
 					SelectObject(memDC, GetStockObject(GRAY_BRUSH));
 				else
 					SelectObject(memDC, GetStockObject(WHITE_BRUSH));
 				Polygon(memDC, vtxList, vtxCount);
+				if (selectedObject.GetBody() == bodyPointer)
+					DeleteObject(SelectObject(memDC, oldBrush));
 			}
 		}
 
