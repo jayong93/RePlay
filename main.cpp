@@ -193,6 +193,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ofn.lpstrFilter = TEXT("리플레이 데이터(*.rep)\0*.rep\0");
 			ofn.lpstrFile = buf;
 			ofn.nMaxFile = 256;
+			ofn.Flags = OFN_FILEMUSTEXIST;
 			if (GetOpenFileName(&ofn))
 			{
 				std::ifstream in{ buf, std::ios::in | std::ios::binary };
