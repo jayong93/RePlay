@@ -53,19 +53,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// 기본 메시지 루프입니다.
 	while (msg.message != WM_QUIT)
 	{
-		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+		if (GetMessage(&msg, nullptr, 0, 0))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
-		}
-		else
-		{
-			currentTime = GetTickCount();
-			if (currentTime - prevTime >= 1000 * timeStep)
-			{
-				world->Step(timeStep, 8, 3);
-				prevTime = currentTime;
-			}
 		}
 	}
 
@@ -382,6 +373,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (isRecoding)
 				frameCount++;
 
+			world->Step(timeStep, 8, 3);
+
 			break;
 
 		case 1:
@@ -453,6 +446,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			frameCount++;
 
+			world->Step(timeStep, 8, 3);
+
 			if (it == rDataList.end())
 			{
 				KillTimer(hWnd, 1);
@@ -492,7 +487,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			selectedObject.SetBody(nullptr);
 			if (isRecoding)
 			{
-				rDataList.emplace_back(ReplayDataType::UNSELECT_BODY, frameCount, 0, nullptr);
+				rDataList.emplace_back(ReplayDataType::UNSELECT_BODY, frameCount+1, 0, nullptr);
 			}
 		}
 		ReleaseCapture();
